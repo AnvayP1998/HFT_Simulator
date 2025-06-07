@@ -1,0 +1,8 @@
+[package]
+name = "HFT_Simulator_Rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ordered-float = "4"
+rand = "0.8"
