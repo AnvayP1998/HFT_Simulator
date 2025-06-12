@@ -1,4 +1,43 @@
 const API_BASE = 'http://127.0.0.1:3030';
+let priceChart;
+function updatePriceChart(trades) {
+    if (!trades.length) return;
+    // Prepare data
+    const labels = trades.map((t, i) => t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : (i+1));
+    const prices = trades.map(t => t.price);
+
+    if (!priceChart) {
+        // First time, create chart
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        priceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Trade Price',
+                    data: prices,
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false }},
+                scales: {
+                    x: { display: false },
+                    y: { beginAtZero: false }
+                }
+            }
+        });
+    } else {
+        // Update existing chart
+        priceChart.data.labels = labels;
+        priceChart.data.datasets[0].data = prices;
+        priceChart.update();
+    }
+}
+
 
 // ==== Notification Helpers ====
 function showError(msg, isSuccess = false) {
@@ -71,6 +110,68 @@ document.getElementById('clearBtn').onclick = async function() {
     }
 };
 
+// ==== BOT CONTROLS (Frontend-Only, Simulated) ====
+let botInterval = null;
+let botActive = false;
+
+document.getElementById('startBotBtn').onclick = function() {
+    if (botActive) return;
+    const botType = document.getElementById('botType').value;
+    botActive = true;
+    document.getElementById('botStatus').textContent = `${botType === 'maker' ? 'Market Maker' : 'Random Trader'} running...`;
+
+    botInterval = setInterval(() => {
+        if (botType === 'random') {
+            submitRandomOrder();
+        } else {
+            submitMarketMakerOrder();
+        }
+    }, 2000); // bot submits every 2 seconds (tweak as needed)
+};
+
+document.getElementById('stopBotBtn').onclick = function() {
+    botActive = false;
+    clearInterval(botInterval);
+    document.getElementById('botStatus').textContent = "Bot stopped";
+};
+
+function submitRandomOrder() {
+    // Random buy/sell, price, quantity
+    const side = Math.random() > 0.5 ? "Buy" : "Sell";
+    const order_type = Math.random() > 0.5 ? "Limit" : "Market";
+    const price = order_type === "Limit" ? (Math.random() * 100 + 50).toFixed(2) : null;
+    const quantity = (Math.random() * 5 + 1).toFixed(2);
+
+    fetch(`${API_BASE}/order`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ side, order_type, price: price ? Number(price) : null, quantity: Number(quantity) })
+    });
+}
+
+function submitMarketMakerOrder() {
+    // Places a limit buy AND sell order near the last trade price
+    fetch(`${API_BASE}/trades`)
+        .then(res => res.json())
+        .then(trades => {
+            let lastPrice = trades.length ? trades[trades.length-1].price : 100;
+            let buyPrice = (lastPrice * 0.99).toFixed(2);
+            let sellPrice = (lastPrice * 1.01).toFixed(2);
+
+            fetch(`${API_BASE}/order`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ side: "Buy", order_type: "Limit", price: Number(buyPrice), quantity: 1 })
+            });
+            fetch(`${API_BASE}/order`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ side: "Sell", order_type: "Limit", price: Number(sellPrice), quantity: 1 })
+            });
+        });
+}
+
+
 // ==== ORDER BOOK TABLES (sorted, empty state) ====
 function renderOrderBookTables(book) {
     // Defensive: Book must be an array of 2 objects
@@ -80,33 +181,42 @@ function renderOrderBookTables(book) {
     const buyBook = book[0] || {};
     const sellBook = book[1] || {};
 
-    // Buy side sorted descending
-    const buyPrices = Object.keys(buyBook).map(Number).sort((a, b) => b - a);
-    // Sell side sorted ascending
-    const sellPrices = Object.keys(sellBook).map(Number).sort((a, b) => a - b);
+    // --- BUY ORDERS ---
+    const buyPrices = Object.keys(buyBook)
+        .map(str => parseFloat(str))
+        .sort((a, b) => b - a)
+        .map(num => num.toFixed(1)); // To match key format if needed
 
     let buyTable = '<h4>Buy Orders</h4><table class="table table-striped table-bordered"><tr><th>Side</th><th>Price</th><th>Quantity</th></tr>';
-    if (buyPrices.length === 0) buyTable += '<tr><td colspan="3" class="text-center text-muted">No buy orders</td></tr>';
-    buyPrices.forEach(price => {
-        const arr = buyBook[price];
-        if (Array.isArray(arr)) {
+    if (Object.keys(buyBook).length === 0) {
+        buyTable += '<tr><td colspan="3" class="text-center text-muted">No buy orders</td></tr>';
+    } else {
+        buyPrices.forEach(priceStr => {
+            const arr = buyBook[priceStr] || buyBook[parseFloat(priceStr).toString()] || [];
             arr.forEach(order => {
                 buyTable += `<tr><td>${order.side}</td><td>${order.price}</td><td>${order.quantity}</td></tr>`;
             });
-        }
-    });
+        });
+    }
     buyTable += '</table>';
 
+    // --- SELL ORDERS ---
+    const sellPrices = Object.keys(sellBook)
+        .map(str => parseFloat(str))
+        .sort((a, b) => a - b)
+        .map(num => num.toFixed(1)); // To match key format if needed
+
     let sellTable = '<h4>Sell Orders</h4><table class="table table-striped table-bordered"><tr><th>Side</th><th>Price</th><th>Quantity</th></tr>';
-    if (sellPrices.length === 0) sellTable += '<tr><td colspan="3" class="text-center text-muted">No sell orders</td></tr>';
-    sellPrices.forEach(price => {
-        const arr = sellBook[price];
-        if (Array.isArray(arr)) {
+    if (Object.keys(sellBook).length === 0) {
+        sellTable += '<tr><td colspan="3" class="text-center text-muted">No sell orders</td></tr>';
+    } else {
+        sellPrices.forEach(priceStr => {
+            const arr = sellBook[priceStr] || sellBook[parseFloat(priceStr).toString()] || [];
             arr.forEach(order => {
                 sellTable += `<tr><td>${order.side}</td><td>${order.price}</td><td>${order.quantity}</td></tr>`;
             });
-        }
-    });
+        });
+    }
     sellTable += '</table>';
 
     return buyTable + sellTable;
@@ -174,6 +284,7 @@ async function refreshTrades() {
         const trades = await res.json();
         renderLastPrice(trades);
         document.getElementById('trades').innerHTML = renderTradesTable(trades);
+        updatePriceChart(trades);
     } catch (err) {
         document.getElementById('trades').innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
         document.getElementById('lastPrice').innerHTML = '<div class="text-muted">No trades yet.</div>';
@@ -202,3 +313,39 @@ setInterval(() => {
 refreshOrderBook();
 refreshTrades();
 refreshStats();
+
+function tradesToCsv(trades) {
+    if (!trades.length) return "";
+    const keys = Object.keys(trades[0]);
+    const csvRows = [keys.join(",")];
+    trades.forEach(trade => {
+        const values = keys.map(k => `"${(trade[k] !== undefined && trade[k] !== null) ? trade[k] : ''}"`);
+        csvRows.push(values.join(","));
+    });
+    return csvRows.join("\n");
+}
+
+document.getElementById('exportCsvBtn').onclick = async function() {
+    try {
+        const res = await fetch(`${API_BASE}/trades`);
+        if (!res.ok) throw new Error('Failed to fetch trades');
+        const trades = await res.json();
+        const csv = tradesToCsv(trades);
+        if (!csv) {
+            showError("No trades to export.");
+            return;
+        }
+        // Download as file
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "trades.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        showError("Export failed: " + err.message);
+    }
+};

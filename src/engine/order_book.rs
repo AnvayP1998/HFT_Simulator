@@ -9,6 +9,11 @@ pub struct OrderBook {
 }
 
 impl OrderBook {
+    pub fn clear(&mut self) {
+        self.buy_orders.clear();
+        self.sell_orders.clear();
+    }
+
     pub fn new() -> Self {
         Self {
             buy_orders: BTreeMap::new(),
@@ -18,6 +23,7 @@ impl OrderBook {
     }
 
    pub fn add_order(&mut self, mut order: Order) -> Vec<Trade> {
+        println!("(DEBUG) Received new order: {:?}", order);
     order.id = self.next_order_id;
     self.next_order_id += 1;
     let mut trades = Vec::new();
@@ -106,6 +112,8 @@ impl OrderBook {
             }
         }
     }
+     println!("(DEBUG) Buy orders: {:?}", self.buy_orders);
+    println!("(DEBUG) Sell orders: {:?}", self.sell_orders);
     trades
 }
 

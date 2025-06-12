@@ -66,7 +66,7 @@ async fn main() {
             let ob = book.lock().unwrap();
             let buy = &ob.buy_orders;
             let sell = &ob.sell_orders;
-            warp::reply::json(&(buy, sell))
+            warp::reply::json(&vec![buy, sell])
         });
 
     // GET /trades (trade history)
@@ -99,6 +99,24 @@ async fn main() {
             }))
         });
 
+    let clear = warp::post()
+        .and(warp::path("clear"))
+        .and(book_filter.clone())
+        .and(trades_filter.clone())
+        .map(|book: Arc<Mutex<OrderBook>>, trades: Arc<Mutex<Vec<Trade>>>| {
+            // Actually clear the data!
+            {
+                let mut ob = book.lock().unwrap();
+                ob.clear(); // (Assuming you implement this method below)
+            }
+            {
+                let mut t = trades.lock().unwrap();
+                t.clear();
+            }
+            warp::reply::with_status("Cleared", warp::http::StatusCode::OK)
+        });
+  
+            
     let cors = warp::cors()
         .allow_origin("http://127.0.0.1:5500") 
         .allow_methods(vec!["GET", "POST"])
@@ -108,6 +126,7 @@ async fn main() {
         .or(get_orderbook)
         .or(get_trades)
         .or(get_stats)
+        .or(clear)
         .with(cors);  
 
     println!("Running server on http://127.0.0.1:3030");
