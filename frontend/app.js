@@ -1,9 +1,47 @@
 const API_BASE = 'http://127.0.0.1:3030';
+
+function fixOrderBookShape(book) {
+    // If already [buyBook, sellBook] in object form, just return
+    if (
+        Array.isArray(book) &&
+        book.length === 2 &&
+        typeof book[0] === 'object' &&
+        typeof book[1] === 'object' &&
+        !Array.isArray(book[0]) &&
+        !Array.isArray(book[1])
+    ) {
+        // But check if both objects have only Buy or only Sell at root
+        const prices0 = Object.values(book[0]);
+        const prices1 = Object.values(book[1]);
+        if (
+            (prices0.length === 0 || prices0.every(arr => arr[0]?.side === "Buy")) &&
+            (prices1.length === 0 || prices1.every(arr => arr[0]?.side === "Sell"))
+        ) {
+            return book;
+        }
+    }
+    // Otherwise, regroup into buyBook and sellBook!
+    let buyBook = {}, sellBook = {};
+    if (Array.isArray(book)) {
+        book.forEach(obj => {
+            Object.keys(obj).forEach(price => {
+                const orders = obj[price];
+                if (!orders.length) return;
+                if (orders[0].side === "Buy") buyBook[price] = orders;
+                if (orders[0].side === "Sell") sellBook[price] = orders;
+            });
+        });
+    }
+    return [buyBook, sellBook];
+}
+
+
+
 let priceChart;
 function updatePriceChart(trades) {
     if (!trades.length) return;
     // Prepare data
-    const labels = trades.map((t, i) => t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : (i+1));
+    const labels = trades.map((t, i) => t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : (i + 1));
     const prices = trades.map(t => t.price);
 
     if (!priceChart) {
@@ -23,7 +61,7 @@ function updatePriceChart(trades) {
             },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false }},
+                plugins: { legend: { display: false } },
                 scales: {
                     x: { display: false },
                     y: { beginAtZero: false }
@@ -66,7 +104,7 @@ function showSpinner(id) {
 }
 
 // ==== ORDER FORM ====
-document.getElementById('orderForm').onsubmit = async function(e) {
+document.getElementById('orderForm').onsubmit = async function (e) {
     e.preventDefault();
     try {
         const side = document.getElementById('side').value;
@@ -83,7 +121,7 @@ document.getElementById('orderForm').onsubmit = async function(e) {
         const order = { side, order_type, price, quantity };
         const res = await fetch(`${API_BASE}/order`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(order)
         });
         if (!res.ok) {
@@ -99,10 +137,10 @@ document.getElementById('orderForm').onsubmit = async function(e) {
 };
 
 // ==== CLEAR ALL ====
-document.getElementById('clearBtn').onclick = async function() {
+document.getElementById('clearBtn').onclick = async function () {
     if (!confirm('Are you sure you want to clear all orders and trades?')) return;
     try {
-        const res = await fetch(`${API_BASE}/clear`, {method: 'POST'});
+        const res = await fetch(`${API_BASE}/clear`, { method: 'POST' });
         if (!res.ok) throw new Error('Failed to clear');
         showSuccess('Order book and trades cleared!');
     } catch (err) {
@@ -114,7 +152,7 @@ document.getElementById('clearBtn').onclick = async function() {
 let botInterval = null;
 let botActive = false;
 
-document.getElementById('startBotBtn').onclick = function() {
+document.getElementById('startBotBtn').onclick = function () {
     if (botActive) return;
     const botType = document.getElementById('botType').value;
     botActive = true;
@@ -129,7 +167,7 @@ document.getElementById('startBotBtn').onclick = function() {
     }, 2000); // bot submits every 2 seconds (tweak as needed)
 };
 
-document.getElementById('stopBotBtn').onclick = function() {
+document.getElementById('stopBotBtn').onclick = function () {
     botActive = false;
     clearInterval(botInterval);
     document.getElementById('botStatus').textContent = "Bot stopped";
@@ -144,7 +182,7 @@ function submitRandomOrder() {
 
     fetch(`${API_BASE}/order`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ side, order_type, price: price ? Number(price) : null, quantity: Number(quantity) })
     });
 }
@@ -154,18 +192,18 @@ function submitMarketMakerOrder() {
     fetch(`${API_BASE}/trades`)
         .then(res => res.json())
         .then(trades => {
-            let lastPrice = trades.length ? trades[trades.length-1].price : 100;
+            let lastPrice = trades.length ? trades[trades.length - 1].price : 100;
             let buyPrice = (lastPrice * 0.99).toFixed(2);
             let sellPrice = (lastPrice * 1.01).toFixed(2);
 
             fetch(`${API_BASE}/order`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ side: "Buy", order_type: "Limit", price: Number(buyPrice), quantity: 1 })
             });
             fetch(`${API_BASE}/order`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ side: "Sell", order_type: "Limit", price: Number(sellPrice), quantity: 1 })
             });
         });
@@ -174,53 +212,59 @@ function submitMarketMakerOrder() {
 
 // ==== ORDER BOOK TABLES (sorted, empty state) ====
 function renderOrderBookTables(book) {
-    // Defensive: Book must be an array of 2 objects
     if (!book || !Array.isArray(book) || book.length < 2) {
         return '<div class="text-muted">Order book unavailable.</div>';
     }
     const buyBook = book[0] || {};
     const sellBook = book[1] || {};
 
-    // --- BUY ORDERS ---
-    const buyPrices = Object.keys(buyBook)
-        .map(str => parseFloat(str))
-        .sort((a, b) => b - a)
-        .map(num => num.toFixed(1)); // To match key format if needed
+    // Numeric sort for price levels
+    const buyPrices = Object.keys(buyBook).sort((a, b) => Number(b) - Number(a));
+    const sellPrices = Object.keys(sellBook).sort((a, b) => Number(a) - Number(b));
 
     let buyTable = '<h4>Buy Orders</h4><table class="table table-striped table-bordered"><tr><th>Side</th><th>Price</th><th>Quantity</th></tr>';
-    if (Object.keys(buyBook).length === 0) {
-        buyTable += '<tr><td colspan="3" class="text-center text-muted">No buy orders</td></tr>';
-    } else {
-        buyPrices.forEach(priceStr => {
-            const arr = buyBook[priceStr] || buyBook[parseFloat(priceStr).toString()] || [];
+    if (buyPrices.length === 0) buyTable += '<tr><td colspan="3" class="text-center text-muted">No buy orders</td></tr>';
+    buyPrices.forEach(price => {
+        const arr = buyBook[price];
+        if (Array.isArray(arr)) {
             arr.forEach(order => {
-                buyTable += `<tr><td>${order.side}</td><td>${order.price}</td><td>${order.quantity}</td></tr>`;
+                const displayPrice = (order.price !== null && order.price !== undefined)
+                    ? Number(order.price).toFixed(2)
+                    : (order.order_type === 'Market' ? 'Market' : '-');
+                const displayQty = (order.quantity !== undefined && order.quantity !== null)
+                    ? Number(order.quantity).toFixed(2)
+                    : '-';
+                buyTable += `<tr><td>${order.side}</td><td>${displayPrice}</td><td>${displayQty}</td></tr>`;
             });
-        });
-    }
+        }
+    });
     buyTable += '</table>';
 
-    // --- SELL ORDERS ---
-    const sellPrices = Object.keys(sellBook)
-        .map(str => parseFloat(str))
-        .sort((a, b) => a - b)
-        .map(num => num.toFixed(1)); // To match key format if needed
-
     let sellTable = '<h4>Sell Orders</h4><table class="table table-striped table-bordered"><tr><th>Side</th><th>Price</th><th>Quantity</th></tr>';
-    if (Object.keys(sellBook).length === 0) {
-        sellTable += '<tr><td colspan="3" class="text-center text-muted">No sell orders</td></tr>';
-    } else {
-        sellPrices.forEach(priceStr => {
-            const arr = sellBook[priceStr] || sellBook[parseFloat(priceStr).toString()] || [];
+    if (sellPrices.length === 0) sellTable += '<tr><td colspan="3" class="text-center text-muted">No sell orders</td></tr>';
+    sellPrices.forEach(price => {
+        const arr = sellBook[price];
+        if (Array.isArray(arr)) {
             arr.forEach(order => {
-                sellTable += `<tr><td>${order.side}</td><td>${order.price}</td><td>${order.quantity}</td></tr>`;
+                const displayPrice = (order.price !== null && order.price !== undefined)
+                    ? Number(order.price).toFixed(2)
+                    : (order.order_type === 'Market' ? 'Market' : '-');
+                const displayQty = (order.quantity !== undefined && order.quantity !== null)
+                    ? Number(order.quantity).toFixed(2)
+                    : '-';
+                sellTable += `<tr><td>${order.side}</td><td>${displayPrice}</td><td>${displayQty}</td></tr>`;
             });
-        });
-    }
+        }
+    });
     sellTable += '</table>';
+
+    // Optional debug log:
+    // console.log(buyBook, sellBook, buyPrices, sellPrices);
 
     return buyTable + sellTable;
 }
+
+
 
 
 // ==== LAST PRICE ====
@@ -271,8 +315,8 @@ async function refreshOrderBook() {
         const res = await fetch(`${API_BASE}/orderbook`);
         if (!res.ok) throw new Error('Failed to fetch order book');
         const book = await res.json();
-        document.getElementById('orderBook').innerHTML = renderOrderBookTables(book);
-    } catch(err) {
+        document.getElementById('orderBook').innerHTML = renderOrderBookTables(fixOrderBookShape(book));
+    } catch (err) {
         document.getElementById('orderBook').innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
     }
 }
@@ -297,7 +341,7 @@ async function refreshStats() {
         if (!res.ok) throw new Error('Failed to fetch stats');
         const stats = await res.json();
         document.getElementById('stats').innerHTML = renderStats(stats);
-    } catch(e) {
+    } catch (e) {
         document.getElementById('stats').innerHTML = `<span style="color:red;">Error: ${e.message}</span>`;
     }
 }
@@ -325,7 +369,7 @@ function tradesToCsv(trades) {
     return csvRows.join("\n");
 }
 
-document.getElementById('exportCsvBtn').onclick = async function() {
+document.getElementById('exportCsvBtn').onclick = async function () {
     try {
         const res = await fetch(`${API_BASE}/trades`);
         if (!res.ok) throw new Error('Failed to fetch trades');

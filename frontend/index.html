@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>HFT Simulator</title>
   <!-- Bootstrap CSS (only add ONCE) -->
@@ -8,6 +9,7 @@
   <!-- Your custom CSS (optional) -->
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body class="bg-light">
   <div class="container my-4">
 
@@ -47,28 +49,28 @@
             <button type="submit" class="btn btn-primary w-100">Submit</button>
           </div>
         </form>
-        <button id="clearBtn" class="btn btn-outline-danger mt-3">Clear All</button>
+        <button id="clearBtn" type="button" class="btn btn-outline-danger mt-3">Clear All</button>
       </div>
     </div>
- 
+
     <!-- Bot Controls Card -->
     <div class="card mb-3">
-    <div class="card-body">
+      <div class="card-body">
         <h5 class="card-title">Strategy Bot Control</h5>
         <div class="row g-2">
-        <div class="col-md-5">
+          <div class="col-md-5">
             <select id="botType" class="form-select">
-            <option value="random">Random Trader Bot</option>
-            <option value="maker">Market Maker Bot</option>
+              <option value="random">Random Trader Bot</option>
+              <option value="maker">Market Maker Bot</option>
             </select>
-        </div>
-        <div class="col-md-7">
+          </div>
+          <div class="col-md-7">
             <button id="startBotBtn" class="btn btn-success me-2">Start Bot</button>
             <button id="stopBotBtn" class="btn btn-danger">Stop Bot</button>
             <span id="botStatus" class="ms-3 text-secondary"></span>
+          </div>
         </div>
-        </div>
-    </div>
+      </div>
     </div>
 
     <!-- Order Book Card -->
@@ -82,14 +84,15 @@
     <div class="card mb-3">
       <!-- <div class="card-header">Trades</div>
       <div class="card-body" id="trades"></div> -->
-    <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-header d-flex justify-content-between align-items-center">
         <span>Trades</span>
         <button id="exportCsvBtn" class="btn btn-sm btn-outline-primary">Export CSV</button>
+      </div>
+      <div class="card-body">
+        <canvas id="priceChart" height="100"></canvas>
+        <div id="trades"></div>
+      </div>
     </div>
-   <div class="card-body">
-    <canvas id="priceChart" height="100"></canvas>
-    <div id="trades"></div>
-  </div>
 
     <!-- Stats Card -->
     <div class="card mb-3">
@@ -99,4 +102,5 @@
   </div>
   <script src="app.js"></script>
 </body>
+
 </html>
