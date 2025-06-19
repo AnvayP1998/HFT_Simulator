@@ -288,7 +288,8 @@ function renderTradesTable(trades) {
             <td>${trade.sell_order_id}</td>
             <td>${trade.price}</td>
             <td>${trade.quantity}</td>
-            <td>${trade.timestamp ? trade.timestamp : '-'}</td>
+            <td>${trade.timestamp ? new Date(trade.timestamp).toLocaleString() : '-'}</td>
+
         </tr>`;
     });
     html += '</table>';
